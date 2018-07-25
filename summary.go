@@ -10,14 +10,14 @@ import (
 
 type summary struct {
 	means  []float64
-	counts []uint32
+	counts []uint64
 	bitree *fenwick.List
 }
 
 func newSummary(initialCapacity uint) *summary {
 	s := &summary{
 		means:  make([]float64, 0, initialCapacity),
-		counts: make([]uint32, 0, initialCapacity),
+		counts: make([]uint64, 0, initialCapacity),
 	}
 	s.rebuildFenwickTree()
 	return s
@@ -27,7 +27,7 @@ func (s summary) Len() int {
 	return len(s.means)
 }
 
-func (s *summary) Add(key float64, value uint32) error {
+func (s *summary) Add(key float64, value uint64) error {
 
 	if math.IsNaN(key) {
 		return fmt.Errorf("Key must not be NaN")
@@ -94,7 +94,7 @@ func (s summary) Mean(uncheckedIndex int) float64 {
 	return s.means[uncheckedIndex]
 }
 
-func (s summary) Count(uncheckedIndex int) uint32 {
+func (s summary) Count(uncheckedIndex int) uint64 {
 	return s.counts[uncheckedIndex]
 }
 
@@ -119,7 +119,7 @@ func (s summary) FloorSum(sum float64) (index int, cumSum float64) {
 	return index, cumSum
 }
 
-func (s *summary) setAt(index int, mean float64, count uint32) {
+func (s *summary) setAt(index int, mean float64, count uint64) {
 	s.means[index] = mean
 	s.counts[index] = count
 	s.adjustRight(index)
@@ -141,7 +141,7 @@ func (s *summary) adjustLeft(index int) {
 	}
 }
 
-func (s summary) ForEach(f func(float64, uint32) bool) {
+func (s summary) ForEach(f func(float64, uint64) bool) {
 	for i := 0; i < len(s.means); i++ {
 		if !f(s.means[i], s.counts[i]) {
 			break
@@ -152,6 +152,6 @@ func (s summary) ForEach(f func(float64, uint32) bool) {
 func (s summary) Clone() *summary {
 	return &summary{
 		means:  append([]float64{}, s.means...),
-		counts: append([]uint32{}, s.counts...),
+		counts: append([]uint64{}, s.counts...),
 	}
 }

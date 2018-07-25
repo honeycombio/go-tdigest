@@ -8,7 +8,7 @@ import (
 )
 
 func TestEncodeDecode(t *testing.T) {
-	testUints := []uint32{0, 10, 100, 1000, 10000, 65535, 2147483647}
+	testUints := []uint64{0, 10, 100, 1000, 10000, 65535, 2147483647}
 	buf := new(bytes.Buffer)
 
 	for _, i := range testUints {

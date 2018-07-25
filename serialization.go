@@ -35,7 +35,7 @@ func (t TDigest) AsBytes() ([]byte, error) {
 	}
 
 	var x float64
-	t.summary.ForEach(func(mean float64, count uint32) bool {
+	t.summary.ForEach(func(mean float64, count uint64) bool {
 		delta := mean - x
 		x = mean
 		err = binary.Write(buffer, endianess, float32(delta))
@@ -46,7 +46,7 @@ func (t TDigest) AsBytes() ([]byte, error) {
 		return nil, err
 	}
 
-	t.summary.ForEach(func(mean float64, count uint32) bool {
+	t.summary.ForEach(func(mean float64, count uint64) bool {
 		err = encodeUint(buffer, count)
 		return err == nil
 	})
@@ -118,8 +118,8 @@ func FromBytes(buf *bytes.Reader) (*TDigest, error) {
 	return t, nil
 }
 
-func encodeUint(buf *bytes.Buffer, n uint32) error {
-	var b [binary.MaxVarintLen32]byte
+func encodeUint(buf *bytes.Buffer, n uint64) error {
+	var b [binary.MaxVarintLen64]byte
 
 	l := binary.PutUvarint(b[:], uint64(n))
 
@@ -128,10 +128,7 @@ func encodeUint(buf *bytes.Buffer, n uint32) error {
 	return err
 }
 
-func decodeUint(buf *bytes.Reader) (uint32, error) {
+func decodeUint(buf *bytes.Reader) (uint64, error) {
 	v, err := binary.ReadUvarint(buf)
-	if v > 0xffffffff {
-		return 0, errors.New("Something wrong, this number looks too big")
-	}
-	return uint32(v), err
+	return uint64(v), err
 }
