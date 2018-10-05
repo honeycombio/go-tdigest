@@ -112,17 +112,20 @@ func FromBytes(buf *bytes.Reader) (*TDigest, error) {
 	return t, nil
 }
 
-func encodeUint(buf *bytes.Buffer, n uint64) error {
-	var b [binary.MaxVarintLen64]byte
+func encodeUint(buf *bytes.Buffer, n uint32) error {
+	var b [binary.MaxVarintLen32]byte
 
-	l := binary.PutUvarint(b[:], n)
+	l := binary.PutUvarint(b[:], uint64(n))
 
 	buf.Write(b[:l])
 
 	return nil
 }
 
-func decodeUint(buf *bytes.Reader) (uint64, error) {
+func decodeUint(buf *bytes.Reader) (uint32, error) {
 	v, err := binary.ReadUvarint(buf)
-	return v, err
+	if v > 0xffffffff {
+		return 0, errors.New("Something wrong, this number looks too big")
+	}
+	return uint32(v), err
 }
