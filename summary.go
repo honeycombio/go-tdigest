@@ -48,9 +48,11 @@ func (s *summary) Add(key float64, value uint32) error {
 	s.means[idx] = key
 	s.counts[idx] = value
 
-	// Reinitialize the prefixSum cache
-	// we can likely be smarter when doing this
-	s.rebuildFenwickTree()
+	// Expand the fenwick tree and update all changed values.
+	s.bitree.Append(0)
+	for i := idx; i < len(s.counts); i++ {
+		s.bitree.Set(i, int64(s.counts[i]))
+	}
 
 	return nil
 }
