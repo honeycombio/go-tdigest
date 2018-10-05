@@ -4,6 +4,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/leesper/go_rng"
@@ -537,4 +538,30 @@ func BenchmarkAdd10(b *testing.B) {
 
 func BenchmarkAdd100(b *testing.B) {
 	benchmarkAdd(100, b)
+}
+
+func BenchmarkSmallDigests(b *testing.B) {
+	for _, size := range []int{10, 1000, 100000} {
+		b.Run(strconv.Itoa(size), func(b *testing.B) {
+			b.ReportAllocs()
+
+			data := make([]float64, size)
+			for i := 0; i < size; i++ {
+				data[i] = rand.Float64()
+			}
+
+			b.ResetTimer()
+			var td *TDigest
+			for n := 0; n < b.N; n++ {
+				if n%size == 0 {
+					td = uncheckedNew(Compression(100))
+				}
+				err := td.AddWeighted(data[n%size], 1)
+				if err != nil {
+					b.Error(err)
+				}
+			}
+			b.StopTimer()
+		})
+	}
 }
