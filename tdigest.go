@@ -137,7 +137,7 @@ func boundedWeightedAverage(x1 float64, w1 float64, x2 float64, w2 float64) floa
 // most common value for this is 1.
 //
 // This will emit an error if `value` is NaN of if `count` is zero.
-func (t *TDigest) AddWeighted(value float64, count uint32) (err error) {
+func (t *TDigest) AddWeighted(value float64, count uint64) (err error) {
 
 	if count == 0 {
 		return fmt.Errorf("Illegal datapoint <value: %.4f, count: %d>", value, count)
@@ -166,7 +166,7 @@ func (t *TDigest) AddWeighted(value float64, count uint32) (err error) {
 	} else {
 		c := float64(t.summary.Count(closest))
 		newMean := boundedWeightedAverage(t.summary.Mean(closest), c, value, float64(count))
-		t.summary.setAt(closest, newMean, uint32(c)+count)
+		t.summary.setAt(closest, newMean, uint64(c)+count)
 	}
 	t.count += uint64(count)
 
@@ -220,16 +220,17 @@ func (t *TDigest) Compress() (err error) {
 	}
 
 	oldTree := t.summary
-	t.summary = newSummary(uint(t.summary.Len()))
+	oldTree.shuffle()
+	t.summary = newSummary(estimateCapacity(t.compression))
 	t.count = 0
 
-	shuffle(oldTree.means, oldTree.counts, t.rng)
-	oldTree.ForEach(func(mean float64, count uint32) bool {
-		err = t.AddWeighted(mean, count)
-		return err == nil
-	})
-
-	return err
+	for i := range oldTree.means {
+		err := t.AddWeighted(oldTree.means[i], oldTree.counts[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Merge joins a given digest into itself.
@@ -238,20 +239,27 @@ func (t *TDigest) Compress() (err error) {
 // in separate threads and you want to compute quantiles over all the
 // samples. This is particularly important on a scatter-gather/map-reduce
 // scenario.
-func (t *TDigest) Merge(other *TDigest) (err error) {
+func (t *TDigest) Merge(other *TDigest) error {
+	err := t.MergeDestructive(other)
+	other.summary.unshuffle()
+	return err
+}
+
+// As Merge, above, but leaves other in a scrambled state
+func (t *TDigest) MergeDestructive(other *TDigest) error {
 	if other.summary.Len() == 0 {
 		return nil
 	}
 
-	// We must keep the other digest intact
-	data := other.summary.Clone()
-	shuffle(data.means, data.counts, t.rng)
+	other.summary.shuffle()
 
-	data.ForEach(func(mean float64, count uint32) bool {
-		err = t.AddWeighted(mean, count)
-		return err == nil
-	})
-	return err
+	for i := range other.summary.means {
+		err := t.AddWeighted(other.summary.means[i], other.summary.counts[i])
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // CDF computes the fraction in which all samples are less than
@@ -304,7 +312,7 @@ func interpolate(x, x0, x1 float64) float64 {
 //
 // Iteration stops when the supplied function returns false, or when all
 // centroids have been iterated.
-func (t *TDigest) ForEachCentroid(f func(mean float64, count uint32) bool) {
+func (t *TDigest) ForEachCentroid(f func(mean float64, count uint64) bool) {
 	t.summary.ForEach(f)
 }
 
@@ -324,7 +332,7 @@ func (t TDigest) findNeighbors(start int, value float64) (int, int) {
 	return start, lastNeighbor
 }
 
-func (t TDigest) chooseMergeCandidate(begin, end int, value float64, count uint32) int {
+func (t TDigest) chooseMergeCandidate(begin, end int, value float64, count uint64) int {
 	closest := t.summary.Len()
 	sum := t.summary.HeadSum(begin)
 	var n float32

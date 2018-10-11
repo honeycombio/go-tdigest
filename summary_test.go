@@ -33,7 +33,7 @@ func checkSorted(s *summary, t *testing.T) {
 
 func TestCore(t *testing.T) {
 
-	testData := make(map[float64]uint32)
+	testData := make(map[float64]uint64)
 
 	const maxDataSize = 10000
 	s := newSummary(maxDataSize)
@@ -46,7 +46,7 @@ func TestCore(t *testing.T) {
 	// construct a summary made of unique items only
 	for i := 0; i < maxDataSize; i++ {
 		k := rand.Float64()
-		v := rand.Uint32()
+		v := rand.Uint64()
 
 		_, exists := testData[k]
 		if !exists {
@@ -99,12 +99,12 @@ func TestSetAtNeverBreaksSorting(t *testing.T) {
 func TestForEach(t *testing.T) {
 
 	s := newSummary(10)
-	for _, i := range []uint32{1, 2, 3, 4, 5, 6} {
+	for _, i := range []uint64{1, 2, 3, 4, 5, 6} {
 		_ = s.Add(float64(i), i*10)
 	}
 
 	c := 0
-	s.ForEach(func(mean float64, count uint32) bool {
+	s.ForEach(func(mean float64, count uint64) bool {
 		c++
 		return false
 	})
@@ -113,8 +113,8 @@ func TestForEach(t *testing.T) {
 		t.Errorf("ForEach must exit early if the closure returns false")
 	}
 
-	var tot uint32
-	s.ForEach(func(mean float64, count uint32) bool {
+	var tot uint64
+	s.ForEach(func(mean float64, count uint64) bool {
 		tot += count
 		return true
 	})
@@ -126,9 +126,9 @@ func TestForEach(t *testing.T) {
 
 func TestFloorSum(t *testing.T) {
 	s := newSummary(100)
-	var total uint32
+	var total uint64
 	for i := 0; i < 100; i++ {
-		count := uint32(rand.Intn(10) + 1)
+		count := uint64(rand.Intn(10) + 1)
 		_ = s.Add(rand.Float64(), count)
 		total += count
 	}
@@ -171,7 +171,7 @@ func TestFloor(t *testing.T) {
 func TestAdjustLeftRight(t *testing.T) {
 
 	keys := []float64{1, 2, 3, 4, 9, 5, 6, 7, 8}
-	counts := []uint32{1, 2, 3, 4, 9, 5, 6, 7, 8}
+	counts := []uint64{1, 2, 3, 4, 9, 5, 6, 7, 8}
 
 	s := summary{means: keys, counts: counts}
 
@@ -182,7 +182,7 @@ func TestAdjustLeftRight(t *testing.T) {
 	}
 
 	keys = []float64{1, 2, 3, 4, 0, 5, 6, 7, 8}
-	counts = []uint32{1, 2, 3, 4, 0, 5, 6, 7, 8}
+	counts = []uint64{1, 2, 3, 4, 0, 5, 6, 7, 8}
 
 	s = summary{means: keys, counts: counts}
 	s.adjustLeft(4)

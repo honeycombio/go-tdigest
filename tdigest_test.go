@@ -3,6 +3,7 @@ package tdigest
 import (
 	"math"
 	"math/rand"
+	"reflect"
 	"sort"
 	"strconv"
 	"testing"
@@ -221,7 +222,7 @@ func TestWeights(t *testing.T) {
 	// Create data slice with repeats matching weights we gave to tdigest
 	data := []float64{}
 	for i := 0; i < 100; i++ {
-		_ = tdigest.AddWeighted(float64(i), uint32(i))
+		_ = tdigest.AddWeighted(float64(i), uint64(i))
 
 		for j := 0; j < i; j++ {
 			data = append(data, float64(i))
@@ -260,8 +261,8 @@ func TestIntegers(t *testing.T) {
 		t.Errorf("Expected p(0.5) = 2, Got %.2f instead", tdigest.Quantile(0.5))
 	}
 
-	var tot uint32
-	tdigest.ForEachCentroid(func(mean float64, count uint32) bool {
+	var tot uint64
+	tdigest.ForEachCentroid(func(mean float64, count uint64) bool {
 		tot += count
 		return true
 	})
@@ -321,9 +322,26 @@ func TestMerge(t *testing.T) {
 			_ = subs[i%numSubs].Add(num)
 		}
 
+		subzeroSummary := subs[0].summary.Clone()
+		subzeroSummary.rebuildFenwickTree()
+
+		dist2, _ := New(Compression(10))
+		for i := 0; i < numSubs; i++ {
+			dist2.Merge(subs[i])
+		}
+
+		// Make sure merge didn't scramble the summaries
+		if !reflect.DeepEqual(subs[0].summary, subzeroSummary) {
+			t.Error("summary changed by being merged")
+		}
+
+		// Merge empty. Should be no-op
+		empty, _ := New(Compression(10))
+		dist2.Merge(empty)
+
 		_ = dist.Compress()
 
-		dist2 := uncheckedNew()
+		dist2 = uncheckedNew()
 		for i := 0; i < numSubs; i++ {
 			_ = dist2.Merge(subs[i])
 		}
@@ -472,7 +490,7 @@ func TestForEachCentroid(t *testing.T) {
 
 	// Iterate limited number.
 	means := []float64{}
-	tdigest.ForEachCentroid(func(mean float64, count uint32) bool {
+	tdigest.ForEachCentroid(func(mean float64, count uint64) bool {
 		means = append(means, mean)
 		return len(means) != 3
 	})
@@ -482,7 +500,7 @@ func TestForEachCentroid(t *testing.T) {
 
 	// Iterate all datapoints.
 	means = []float64{}
-	tdigest.ForEachCentroid(func(mean float64, count uint32) bool {
+	tdigest.ForEachCentroid(func(mean float64, count uint64) bool {
 		means = append(means, mean)
 		return true
 	})
@@ -496,7 +514,7 @@ func TestCDFInsideLastCentroid(t *testing.T) {
 	td := &TDigest{
 		summary: &summary{
 			means:  []float64{2120.75048828125, 2260.3844299316406, 3900.490264892578, 3937.495807647705, 5390.479816436768, 10450.335285186768, 14152.897296905518, 16442.676349639893, 24303.143146514893, 56961.87361526489, 63891.24959182739, 73982.55232620239, 86477.50447463989, 110746.62556838989, 175479.7388496399, 300492.3404121399, 440452.5279121399, 515611.7700996399, 535827.0025215149, 546241.6822090149, 556965.3648262024, 569791.2124824524, 587320.6870918274, 603969.4175605774, 613751.6177558899, 624708.7593574524, 635060.0718574524, 641924.2007637024, 650656.4302558899, 660653.1714668274, 671380.9009590149, 687094.3667793274, 716595.8824043274, 740870.9800605774, 760276.2437324524, 768857.5786933899, 775021.0025215149, 787686.0337715149, 801473.4624824524, 815225.1255683899, 832358.6997871399, 852438.4751777649, 866134.2935371399, 1.10661549666214e+06, 1.1212118980293274e+06, 1.2230108433418274e+06, 1.5446490620918274e+06, 4.306712312091827e+06, 5.487582562091827e+06, 6.306383562091827e+06, 7.089308312091827e+06, 7.520797593341827e+06},
-			counts: []uint32{0x1, 0x1, 0x1, 0x1, 0x1, 0x2, 0x1, 0x4, 0x5, 0x6, 0x3, 0x3, 0x4, 0x11, 0x23, 0x2f, 0x1e, 0x1b, 0x36, 0x31, 0x33, 0x4e, 0x5f, 0x61, 0x48, 0x2e, 0x26, 0x28, 0x2a, 0x31, 0x39, 0x51, 0x32, 0x2b, 0x12, 0x8, 0xb, 0xa, 0x11, 0xa, 0x11, 0x9, 0x7, 0x1, 0x1, 0x1, 0x3, 0x2, 0x1, 0x1, 0x1, 0x1},
+			counts: []uint64{0x1, 0x1, 0x1, 0x1, 0x1, 0x2, 0x1, 0x4, 0x5, 0x6, 0x3, 0x3, 0x4, 0x11, 0x23, 0x2f, 0x1e, 0x1b, 0x36, 0x31, 0x33, 0x4e, 0x5f, 0x61, 0x48, 0x2e, 0x26, 0x28, 0x2a, 0x31, 0x39, 0x51, 0x32, 0x2b, 0x12, 0x8, 0xb, 0xa, 0x11, 0xa, 0x11, 0x9, 0x7, 0x1, 0x1, 0x1, 0x3, 0x2, 0x1, 0x1, 0x1, 0x1},
 		},
 		compression: 5,
 		count:       1250,
@@ -563,5 +581,52 @@ func BenchmarkSmallDigests(b *testing.B) {
 			}
 			b.StopTimer()
 		})
+	}
+}
+
+// Pathological ordered-input case.
+func BenchmarkAddOrdered(b *testing.B) {
+	t, _ := New()
+
+	for n := 0; n < b.N; n++ {
+		err := t.Add(float64(n))
+		if err != nil {
+			b.Error(err)
+		}
+	}
+}
+
+func BenchmarkMerge(b *testing.B) {
+	b.ReportAllocs()
+
+	t, _ := New()
+	for n := 0; n < 1000; n++ {
+		t.AddWeighted(rand.Float64(), uint64(rand.Intn(100)))
+	}
+
+	dest, _ := New()
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		dest.Merge(t)
+	}
+}
+
+func BenchmarkMergeDestructive(b *testing.B) {
+	b.ReportAllocs()
+
+	t, _ := New()
+	for n := 0; n < 1000; n++ {
+		t.AddWeighted(rand.Float64(), uint64(rand.Intn(100)))
+	}
+
+	dest, _ := New()
+
+	b.ResetTimer()
+
+	// After the first iteration, t's summary is scrambled, which means it's
+	// mostly useless, but we can still merge it.
+	for n := 0; n < b.N; n++ {
+		dest.MergeDestructive(t)
 	}
 }

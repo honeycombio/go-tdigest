@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"encoding/base64"
 	"math/rand"
+	"reflect"
 	"testing"
 )
 
 func TestEncodeDecode(t *testing.T) {
-	testUints := []uint32{0, 10, 100, 1000, 10000, 65535, 2147483647}
+	testUints := []uint64{0, 10, 100, 1000, 10000, 65535, 2147483647}
 	buf := new(bytes.Buffer)
 
 	for _, i := range testUints {
@@ -37,6 +38,88 @@ func TestSerialization(t *testing.T) {
 
 	if t1.Count() != t2.Count() || t1.summary.Len() != t2.summary.Len() || t1.compression != t2.compression {
 		t.Errorf("Deserialized to something different. t1=%v t2=%v serialized=%v", t1, t2, serialized)
+	}
+
+	var toBuf []byte
+	toBuf = t1.ToBytes(toBuf)
+	if !reflect.DeepEqual(serialized, toBuf) {
+		t.Errorf("ToBytes serialized to something else")
+	}
+
+	// Make sure we don't re-allocate on buffer re-use
+	toBuf2 := t1.ToBytes(toBuf[:0])
+	if &toBuf2[0] != &toBuf[0] {
+		t.Errorf("Expected ToBytes() to re-use supplied slice")
+	}
+	if !reflect.DeepEqual(toBuf2, toBuf) {
+		t.Errorf("ToBytes serialized to something else")
+	}
+
+	t3, _ := New()
+	err := t3.FromBytes(serialized)
+	if err != nil {
+		t.Error(err)
+	}
+	if t1.count != t3.count || t1.summary.Len() != t3.summary.Len() || t1.compression != t3.compression {
+		t.Errorf("Deserialized to something different. t1=%v t3=%v serialized=%v", t1, t3, serialized)
+	}
+	if !reflect.DeepEqual(t2, t3) {
+		t.Errorf("FromBytes method deserialized to something different from FromBytes function")
+	}
+
+	// Mess up t3's internal state, deserialize again.
+	t3.compression = 2
+	t3.count = 1000
+	t3.summary.means = append(t3.summary.means, 2.0)
+	t3.summary.counts[0] = 0
+	err = t3.FromBytes(serialized)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(t2, t3) {
+		t.Errorf("FromBytes method deserialized to something different from FromBytes function")
+	}
+
+	wrong := serialized[:50]
+	err = t3.FromBytes(wrong)
+	if err == nil {
+		t.Error("expected error")
+	}
+	wrong = wrong[:2]
+	err = t3.FromBytes(wrong)
+	if err == nil {
+		t.Error("expected error")
+	}
+}
+
+func TestLargeSerializaton(t *testing.T) {
+	t1, _ := New(Compression(10))
+
+	for i := 0; i < 100000; i++ {
+		t1.Add(rand.Float64())
+	}
+
+	serialized, _ := t1.AsBytes()
+	serialized2 := t1.ToBytes(nil)
+	if !reflect.DeepEqual(serialized, serialized2) {
+		t.Error("serialized version differ")
+	}
+
+	t2, err := FromBytes(bytes.NewReader(serialized))
+	if err != nil {
+		t.Error(err)
+	}
+
+	var t3 TDigest
+	err = t3.FromBytes(serialized2)
+	if err != nil {
+		t.Error(err)
+	}
+	if t1.count != t2.count || t1.summary.Len() != t2.summary.Len() || t1.compression != t2.compression {
+		t.Errorf("Deserialized to something different. t1=%v t2=%v serialized=%v", t1, t2, serialized)
+	}
+	if t1.count != t3.count || t1.summary.Len() != t3.summary.Len() || t1.compression != t3.compression {
+		t.Errorf("Deserialized to something different. t1=%v t3=%v serialized=%v", t1, t3, serialized)
 	}
 }
 
@@ -82,4 +165,69 @@ func TestJavaSmallBytesCompat(t *testing.T) {
 	assertDifferenceSmallerThan(tdigest, 0.99, 0.005, t)
 	assertDifferenceSmallerThan(tdigest, 0.001, 0.001, t)
 	assertDifferenceSmallerThan(tdigest, 0.999, 0.001, t)
+}
+
+func BenchmarkAsBytes(b *testing.B) {
+	b.ReportAllocs()
+
+	t1, _ := New()
+	for i := 0; i < 100; i++ {
+		t1.Add(rand.Float64())
+	}
+
+	b.ResetTimer()
+
+	for n := 0; n < b.N; n++ {
+		t1.AsBytes()
+	}
+}
+
+func BenchmarkToBytes(b *testing.B) {
+	b.ReportAllocs()
+
+	t1, _ := New()
+	for i := 0; i < 100; i++ {
+		t1.Add(rand.Float64())
+	}
+
+	b.ResetTimer()
+	var buf []byte
+	for n := 0; n < b.N; n++ {
+		buf = t1.ToBytes(buf)
+	}
+}
+
+func BenchmarkFromBytes(b *testing.B) {
+	b.ReportAllocs()
+
+	t1, _ := New()
+	for i := 0; i < 100; i++ {
+		t1.Add(rand.Float64())
+	}
+
+	buf, _ := t1.AsBytes()
+	reader := bytes.NewReader(buf)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		reader.Reset(buf)
+		FromBytes(reader)
+	}
+}
+
+func BenchmarkFromBytesMethod(b *testing.B) {
+	b.ReportAllocs()
+
+	t1, _ := New()
+	for i := 0; i < 100; i++ {
+		t1.Add(rand.Float64())
+	}
+
+	buf, _ := t1.AsBytes()
+
+	b.ResetTimer()
+	var t2 TDigest
+	for n := 0; n < b.N; n++ {
+		t2.FromBytes(buf)
+	}
 }
